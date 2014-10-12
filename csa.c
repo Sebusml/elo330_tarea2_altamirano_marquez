@@ -13,15 +13,16 @@ short int * lectura_audio(char *,int *);
 short int * saturar(short int *,int,double);
 void   w_octave(char* , int );
 void   r_octave(char* );
+//void    escritura_audio(short int *, int);
 
 int main(int argn, char *argv[])
 {
   char      *fn_audio;
   double     gain;
   int        offset;
-  short int *raw_data;
-  short int *sat_data;
-  short int *fix_data;
+  short int *raw_data;    //archivo original
+  short int *sat_data;    //archivo saturado
+  short int *fix_data;    //archivo con el fit realizado
   int        i,status,nbytes; 
   int       *size_data;
   pid_t      pid;
@@ -45,8 +46,19 @@ int main(int argn, char *argv[])
     }
   /*Lectura datos*/
   raw_data = lectura_audio(fn_audio,size_data);
-  /*Saturacion de datos*/
+  /*Saturacion de datos: aplica la ganancia al archivo y lo reescala a la vez*/
   sat_data = saturar(raw_data,*size_data,gain);
+
+
+  for(i=0;i<*size_data;i++){
+
+    printf("raw y sat: %hd %hd\n",raw_data[i],sat_data[i]);
+  }
+  /*printf("Comienza escritura de sat_data\n");
+  escritura_audio(raw_data,*size_data);
+  printf("Finaliza escritura de sat_data \n");
+  */
+
   /*Crear pipes*/
   if (pipe(pipe1) < 0) {
     perror("input pipe");
@@ -81,14 +93,45 @@ int main(int argn, char *argv[])
   FILE* sd2 = fdopen(pipe2[0],"r");
   /*Enviar datos a octave*/
   /*Enviar Raw data*/
+  
+  /*
+  fprintf(sd,"offset=%d\n",offset); 
+  fflush(sd);
+  sleep(1);
+  printf("Offset enviado \n");
+  */
   fprintf(sd,"raw=[");
   for (i=0; i < *size_data ; i++){
     fprintf(sd,"%hd ",raw_data[i]);
     }
   fprintf(sd," ];\n"); 
+  sleep(1);
   fflush(sd);
   printf("Raw_data enviada \n");
   
+  fprintf(sd,"sat=[");
+  for (i=0; i < *size_data ; i++){
+    fprintf(sd,"%hd ",sat_data[i]);
+    }
+  fprintf(sd," ];\n"); 
+  fflush(sd);
+  sleep(1);
+  printf("Sat_data enviada \n");
+/*
+  
+*/
+
+  fprintf(sd,"octave_notebook\n"); 
+  fflush(sd);
+  printf("Ejecución del Script \n");
+  sleep(5);
+
+  fprintf(sd,"sound_plots\n"); 
+  fflush(sd);
+  printf("Imprimiendo gráficos \n");
+  sleep(30);
+
+
   //fprintf(sd,"plot(1,2)\n");fflush(sd);
   //sleep(20);
   fprintf(sd,"format free;disp(raw(1:10)) \n");
@@ -176,13 +219,38 @@ short int * saturar(short int * raw_data, int size_data, double gain)
   sat_data = calloc(size_data,sizeof(short int));
   for(i = 0; i<size_data;i++){
     if ( gain*raw_data[i] >= 32767 )
+    {
+      //printf("DATOS SATUDRADO\n");
       sat_data[i] = 32767/gain;
-    if ( gain*raw_data[i] <= -32767 )
+    }
+    else if ( gain*raw_data[i] <= -32767 )
+    {
+      //printf("DATOS SATUDRADO\n");
       sat_data[i] = -32767/gain;   
-    sat_data[i] = raw_data[i];
+    } 
+    else
+      sat_data[i] = raw_data[i];
     //printf("sat: %hd\n",sat_data[i]);
-    }  
+    }
   return sat_data;
 }
 
+/*
+void escritura_audio(short int * audio_data, int size_data)
+{
+  int i=0;
+  int filedesc;
+  printf("%d\n", size_data);
+  //FILE *audio_file;
+  filedesc = open("audio_guardado.raw", O_WRONLY);
+  //audio_file=fopen("audio_guardado.raw","rb");
+  int nbytes;
+  nbytes=write(filedesc,audio_data,2*size_data);
 
+  //fclose(audio_file);
+
+  printf("%d\n",nbytes);
+
+}
+
+*/
