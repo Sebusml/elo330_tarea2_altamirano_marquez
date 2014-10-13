@@ -8,37 +8,35 @@
 #include <math.h>
 #include <signal.h>
 
-#define SLEEP_T 0.5
+#define SLEEP_T 0.1
 
 short int * lectura_audio(char *,int *);
-void        escritura(short int *, char*,int);
+void        escritura_audio(short int *, char*,int);
 short int * saturar(short int *,int,double);
 void        get_fix_data(short int **,int*,FILE**,FILE**);
 void        w_octave(char* , int );
 void        r_octave(char* );
-static void sig_alrm(int); 
-//void    escritura_audio(short int *, int);
-
+//static void sig_alrm(int); 
 
 int main(int argn, char *argv[])
 {
-  char      *fn_audio;
-  double     gain;
-  int        offset;
-  short int *raw_data;    //archivo original
-  short int *sat_data;    //archivo saturado
-  short int *fix_data;    //archivo con el fit realizado
+  char      *fn_audio;              //nombre del archivo a procesar
+  double     gain;                  //ganancia aplicada
+  int        offset;                //offset de tiempo en [ms]
+  short int *raw_data;              //archivo original
+  short int *sat_data;              //archivo saturado
+  short int *fix_data;              //archivo con el fit realizado
   int        i,j,status,nbytes; 
   int       *size_data;
   pid_t      pid;
-  int        pipe1[2];    //pipe que recibe desde octave
-  int        pipe2[2];    /*pipe que escribe en octave *pipe original*/
+  int        pipe1[2];              //pipe donde el proceso padre escribe
+  int        pipe2[2];              //pipe donde el proceso hijo (octave) escribe
   char       str [100];
   char       readbuffer[100]; 
-  size_data = malloc(sizeof(int));
+  size_data = malloc(sizeof(int));  //puntero hacia el numero de muestras del archivo de audio
   
   /*Signal */
-  signal(SIGINT, sig_alrm);
+//  signal(SIGINT, sig_alrm);
   
   /*Verificar Argumentos*/
   if(argn < 4){
@@ -52,18 +50,20 @@ int main(int argn, char *argv[])
     printf("Ganancia debe ser mayor a uno \n");
     return 1;
     }
+
   /*Lectura datos*/
   raw_data = lectura_audio(fn_audio,size_data);
-  /*Saturacion de datos: aplica la ganancia al archivo y lo reescala a la vez*/
+
+  /*Saturacion de datos:aplica la ganancia al archivo y lo reescala a la vez*/
   sat_data = saturar(raw_data,*size_data,gain);
 
   /*Crear pipes*/
   if (pipe(pipe1) < 0) {
-    perror("input pipe");
+    perror("pipe1");
     exit(1);
   }
   if (pipe(pipe2) < 0) {
-    perror("output pipe");
+    perror("pipe2");
     exit(1);
   }
   if ((pid = fork()) < 0) {
@@ -85,19 +85,21 @@ int main(int argn, char *argv[])
     exit(-1); 
   }
   /*-------------*/
+
   /*Proceso Padre*/
   /*Configurar pipe*/
   close(pipe1[0]);
   close(pipe2[1]);
+
+  /*crea archivo*/
   FILE* sd = fdopen(pipe1[1],"w");
   FILE* sd2 = fdopen(pipe2[0],"r");
   
   /*Enviar datos a octave*/
-    
   fprintf(sd,"offset=%d\n",offset); 
   fflush(sd);
-  sleep(1);
-  printf("Offset enviado \n");
+  //sleep(SLEEP_T);
+  //printf("Offset enviado \n");
   
   /*Enviar Raw data*/
   fprintf(sd,"raw=[");
@@ -105,9 +107,9 @@ int main(int argn, char *argv[])
     fprintf(sd,"%hd ",raw_data[i]);
     }
   fprintf(sd," ];\n"); 
-  sleep(1);
+  //sleep(SLEEP_T);
   fflush(sd);
-  printf("Raw_data enviada \n");
+  //printf("Raw_data enviada \n");
   
   /*Enviar Sat_data*/
   fprintf(sd,"sat=[");
@@ -116,21 +118,22 @@ int main(int argn, char *argv[])
     }
   fprintf(sd," ];\n"); 
   fflush(sd);
-  sleep(1);
-  printf("Sat_data enviada \n");
+  //sleep(SLEEP_T);
+  printf("\nDatos enviados \n");
    
   /*Enviar comandos para graficar*/ 
   fprintf(sd,"octave_notebook\n"); 
   fflush(sd);
-  printf("Ejecución del Script \n");
-  sleep(1);
+  //printf("Ejecución del Script \n");
+  //sleep(SLEEP_T);
 
   fprintf(sd,"sound_plots\n"); 
   fflush(sd);
   printf("Imprimiendo gráficos \n");
-  sleep(1);
+  //sleep(SLEEP_T);
   
-  /*--Recivir Fix data--*/
+  /*--Recibir Fix data--*/
+  printf("Recibiendo señal suavizada \n");
   get_fix_data(&fix_data,size_data, &sd, &sd2);
   /*-- Fix data complete--*/
   
@@ -140,21 +143,24 @@ int main(int argn, char *argv[])
   for (i=0;i<*size_data;i++){
     error = error + (fix_data[i]-raw_data[i])*(fix_data[i]-raw_data[i]);
     }
+  printf("\nformula del profe: %f \n",error);
   error = error/ *size_data;
-  printf("ERROR normalizado: %f \n",error);
+  printf("ERROR normalizado: %f \n\n",error);
   
   /*Guardar datos*/
-  escritura(fix_data, "fix_data.raw" ,*size_data);
-  escritura(sat_data, "sat_data.raw" ,*size_data);
+  escritura_audio(fix_data, "fix_data.raw" ,*size_data);
+  escritura_audio(sat_data, "sat_data.raw" ,*size_data);
+
   
   /*Reproducir archivos*/
-  printf(" %s \n",argv[4]);
-  if ( strcmp(argv[4],"p") == 0  ){
+  if ( argn==5 && strcmp(argv[4],"p") == 0  ){
     sprintf(str,"aplay --format=S16_LE -t raw %s", fn_audio);
     system(str);
     system("aplay --format=S16_LE -t raw sat_data.raw");
     system("aplay --format=S16_LE -t raw fix_data.raw");
   }
+
+  printf("Presione Enter para cerrar\n");
   getchar();
   fclose(sd);
   fclose(sd2);
@@ -175,12 +181,10 @@ short int * lectura_audio(char *fn_audio,int *size_data)
   filedesc = fopen(fn_audio, "r");
   size_file = 0;
 
-  while(fread(BUFFER, 2 , 1,filedesc) == 1) 
+  while(fread(BUFFER, 2 , 1,filedesc) != 0)
     size_file++;
-  printf("muestras: %d \n",size_file);
-  fclose(filedesc);
-
-  filedesc = fopen(fn_audio, "r");
+  
+  rewind(filedesc);
   raw_data = calloc(size_file,sizeof(short int));
   fread(raw_data, 2 , size_file,filedesc);
   fclose(filedesc);
@@ -237,15 +241,17 @@ void get_fix_data(short int ** fix_file,int* size_data, FILE** pd, FILE** pd2)
   
   /*Hay que quitar los caracteres no deseados*/
   // printf("%s \n",readbuffer);
-  sscanf(readbuffer,"octave:2> octave:3> octave:4> octave:4> octave:5> octave:6>  %hd %hd %hd %hd %hd %hd %hd %hd %hd %hd ",&fix_data[0],&fix_data[1],&fix_data[2],&fix_data[3],&fix_data[4],&fix_data[5],&fix_data[6],&fix_data[7],&fix_data[8],&fix_data[9]);
+  //sscanf(readbuffer,"octave:2> octave:3> octave:4> octave:4> octave:5> octave:6>  %hd %hd %hd %hd %hd %hd %hd %hd %hd %hd ",&fix_data[0],&fix_data[1],&fix_data[2],&fix_data[3],&fix_data[4],&fix_data[5],&fix_data[6],&fix_data[7],&fix_data[8],&fix_data[9]);
+  sscanf(readbuffer,"octave:2> octave:3> octave:4> octave:4> octave:5> octave:6>  %hd %hd %hd %hd %hd %hd %hd %hd %hd %hd ",fix_data);
   
   
   for (i=10; i<*size_data-10 ;i=i+10){
     fprintf(sd,"disp(raw(%d+1:%d+10)) \n",i,i); 
     fflush(sd);
     fscanf(sd2, " %[^\n]",readbuffer);
+    //sscanf(readbuffer,"%s %hd %hd %hd %hd %hd %hd %hd %hd %hd %hd",str,&fix_data[i]);
+    
     sscanf(readbuffer,"%s %hd %hd %hd %hd %hd %hd %hd %hd %hd %hd",str,&fix_data[i],&fix_data[i+1],&fix_data[i+2],&fix_data[i+3],&fix_data[i+4],&fix_data[i+5],&fix_data[i+6],&fix_data[i+7],&fix_data[i+8],&fix_data[i+9]);
-    //printf("Antes del stacksmash %d\n",i);
     }
   fprintf(sd,"disp(raw(%d))\n",*size_data);
   fflush(sd);
@@ -253,13 +259,15 @@ void get_fix_data(short int ** fix_file,int* size_data, FILE** pd, FILE** pd2)
   sscanf(readbuffer,"%s %hd",str ,&fix_data[*size_data-1]);
 }
 
+/*
 static void sig_alrm(int signo)
 {
   printf("Proceso interrumpido por teclado\n");
   exit(1);
 }
+*/
 
-void escritura(short int * audio_data, char* name ,int size_data){
+void escritura_audio(short int * audio_data, char* name ,int size_data){
   FILE * audio_file = fopen(name, "wb");
   fwrite(audio_data, 2, size_data, audio_file);
 }

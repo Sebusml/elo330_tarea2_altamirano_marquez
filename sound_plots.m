@@ -1,3 +1,4 @@
+t=offset:1/8:offset+40 -1/8;
 
 figure(1)
 if ((offset*0.001+0.04)*8000<size(x,2))
