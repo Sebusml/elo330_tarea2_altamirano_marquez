@@ -1,3 +1,2 @@
 all:
-	g++ csa.c -o csa -lm
-	
+	gcc csa.c -o csa -lm
