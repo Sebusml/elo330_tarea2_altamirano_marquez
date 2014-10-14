@@ -7,6 +7,7 @@
 #include <math.h>
 #include <string.h>
 
+
 short int * lectura_audio(char *,int *);
 void        escritura_audio(short int *, char*,int);
 short int * saturar(short int *,int,double);

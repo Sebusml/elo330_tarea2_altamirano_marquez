@@ -29,4 +29,4 @@ else
 end
 title("Senal Aproximada");
 xlabel("Tiempo [ms]");
-ylabel("Amsplitud");
+ylabel("Amplitud");
