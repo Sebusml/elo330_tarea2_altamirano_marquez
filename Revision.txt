@@ -1,0 +1,21 @@
+Revisión del ayudante:
+Gabriela Altamirano y Sebastián Marquez
+
+Documentación (30%):	100
+Compilación (10%):		100
+Ejecución (60%):
+* Interpretación del archivo (10%):	100
+* Gráficos (25%):					70
+* Reproducción (15%):				100
+* Índice de error (10%):			100
+-----------------------------
+Total:					
+
+Comentarios:
+* Si bien el código fuente se nota extenso, el hecho de que esté bien identado y con comentarios concisos y precisos hace que sea de una lectura agradable.
+* Me gustó la forma en que se encargaron de "silenciar" el stderr. Buen detalle.
+* No me aparece el gráfico si el offset es 0. Además, el gráfico de la señal suavizada me muestra una recta por algún extraño motivo.
+
+Notas aparte:
+* short int no necesariamente indica un tipo de datos de 16 bits. En una arquitectura x86_64, este tipo de datos de hecho es de 32 bits. Prefieran el tipo int16_t que se encuentra en <stdint.h> para la próxima ocasión. Compila con algunos warnings debido a eso, pero como es dependiente de la arquitectura, no se hará descuento por ellos.
+* Procuren siempre liberar la memoria sin usar con free luego de solicitarla con malloc.
